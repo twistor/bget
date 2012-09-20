@@ -81,9 +81,7 @@ class Bget {
    * @see Bget::forceCloseCurlHandle()
    */
   public function __destruct() {
-    if ($this->curlHandle) {
-      $this->forceCloseCurlHandle();
-    }
+    $this->forceCloseCurlHandle();
   }
 
   /**
@@ -306,7 +304,9 @@ class Bget {
    *   $this, for chaining.
    */
   public function forceCloseCurlHandle() {
-    curl_close($this->curlHandle);
+    if ($this->curlHandle) {
+      curl_close($this->curlHandle);
+    }
     return $this;
   }
 }
