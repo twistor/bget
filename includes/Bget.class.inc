@@ -24,6 +24,13 @@ class Bget {
   protected $curlHandle;
 
   /**
+   * Whether to reuse the same cURL handle for multiple requests.
+   *
+   * Defaults to FALSE.
+   */
+  protected $curlReuseHandle = FALSE;
+
+  /**
    * The URI of the resource to be fetched.
    */
   protected $uri;
@@ -63,6 +70,19 @@ class Bget {
   public function __construct($uri = NULL) {
     if (!empty($uri)) {
       $this->setUri($uri);
+    }
+  }
+
+  /**
+   * Destructor.
+   *
+   * Closes the cURL handle if it still exists.
+   *
+   * @see Bget::forceCloseCurlHandle()
+   */
+  public function __destruct() {
+    if ($this->curlHandle) {
+      $this->forceCloseCurlHandle();
     }
   }
 
@@ -156,6 +176,32 @@ class Bget {
   }
 
   /**
+   * Sets whether or not to reuse the same cURL handle for multiple requests.
+   *
+   * @param $reuse
+   *   Set to TRUE to reuse the same cURL handle for multiple requests and FALSE
+   *   to destroy the cURL handle after every request.
+   *
+   * @return
+   *   $this, for chaining.
+   */
+  public function setCurlReuseHandle($reuse) {
+    $this->curlReuseHandle = (bool) $reuse;
+    return $this;
+  }
+
+  /**
+   * Gets whether or not the cURL handle will be reused for multiple requests.
+   *
+   * @return
+   *   Returns TRUE if the cURL handle will be reused for multiple requests and
+   *   FALSE if it will be closed after every request.
+   */
+  public function getCurlReuseHandle($reuse) {
+    return $this->curlReuseHandle;
+  }
+
+  /**
    * Get the raw server response.
    *
    * @return
@@ -198,28 +244,36 @@ class Bget {
   /**
    * Prepare the cURL handle for execution.
    *
-   * Set the desired cURL options on the handler.
+   * Sets the desired cURL options on the handler and creates a new cURL handle
+   * if it does not already exist.
    *
    * @return
    *   $this, for chaining.
    */
   public function prepareCurlHandle() {
-    $this->curlHandle = curl_init($this->getUri());
-    $this->curlOpts[CURLOPT_RETURNTRANSFER] = TRUE;
-    curl_setopt_array($this->curlHandle, $this->curlOpts);
+    if (!$this->curlHandle) {
+      $this->curlHandle = curl_init();
+    }
+    curl_setopt($this->curlHandle, CURLOPT_URL, $this->getUri());
+
+    // Hardcode CURLOPT_RETURNTRANSFER => TRUE. Maybe this should be set as a
+    // default instead.
+    $this->setCurlOpt(CURLOPT_RETURNTRANSFER, TRUE);
+    curl_setopt_array($this->curlHandle, $this->getCurlOpts());
     return $this;
   }
 
   /**
    * Execute the cURL handle and set the rawResponse property.
    *
-   * @throws BgetCurlException
    * @return
    *   $this, for chaining.
+   *
+   * @throws BgetCurlException
    */
   public function executeCurlHandle() {
     if (($this->rawResponse = curl_exec($this->curlHandle)) === FALSE) {
-      // Get error number and handler
+      // Get error number and handler.
       $curl_errno = curl_errno($this->curlHandle);
       $curl_error = curl_error($this->curlHandle);
       $this->closeCurlHandle();
@@ -229,12 +283,29 @@ class Bget {
   }
 
   /**
-   * Close the cURL handle.
+   * Closes the cURL handle if $curlReuseHandle is set to FALSE.
+   *
+   * @return
+   *   $this, for chaining.
+   *
+   * @see Bget::forceCloseCurlHandle()
+   */
+  public function closeCurlHandle() {
+    if (!$this->curlReuseHandle) {
+      $this->forceCloseCurlHandle();
+    }
+    return $this;
+  }
+
+  /**
+   * Force closes the cURL handle.
+   *
+   * Disregards $curlReuseHandle and closes the cURL handle.
    *
    * @return
    *   $this, for chaining.
    */
-  public function closeCurlHandle() {
+  public function forceCloseCurlHandle() {
     curl_close($this->curlHandle);
     return $this;
   }
